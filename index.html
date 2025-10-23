@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Hidden Maze Multiplayer</title>
+<style>
+:root{
+  --cell-size:36px; --wall-color:#111; --path-color:#eee;
+  --fog-color:#999; --player1-color:#1976d2; --player2-color:#d32f2f;
+  --exit-color:#2e7d32; --visited-color:#dfefff; --available-color:#f9d835;
+}
+body{
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  margin:0; padding:16px; color:#111;
+  display:flex; flex-direction:column; align-items:center;
+  background:#fafafa;
+}
+#homeScreen, #gameScreen { width:100%; max-width:1000px; }
+#homeScreen {
+  text-align:center; padding:40px 20px;
+}
+#homeScreen h1 { font-size:2.4rem; margin-bottom:32px; color:#222; }
+.home-btn {
+  display:inline-block; margin:12px;
+  padding:16px 40px; font-size:1.2rem; font-weight:600;
+  border:none; border-radius:10px; color:white; cursor:pointer;
+  transition:opacity 0.2s;
+}
+.home-btn.create { background:#1976d2; }
+.home-btn.join { background:#d32f2f; }
+.home-btn:hover { opacity:0.9; }
+.home-input {
+  margin:20px 0; padding:12px; font-size:1.1rem;
+  width:220px; text-align:center; border:2px solid #ccc; border-radius:8px;
+}
+.hidden { display:none !important; }
+
+/* Game Layout */
+#gameScreen {
+  display:flex; gap:24px; align-items:flex-start;
+  width:100%;
+}
+.left { width:max-content; }
+.board {
+  display:grid; gap:2px; background:#444;
+  padding:6px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.15);
+}
+.cell {
+  width:var(--cell-size); height:var(--cell-size);
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; user-select:none; border-radius:4px; box-sizing:border-box;
+  cursor: pointer;
+}
+.wall { background: var(--wall-color); }
+.path { background: var(--path-color); }
+.fog { background: var(--fog-color); filter:brightness(.95); }
+.visited { background: var(--visited-color); }
+.player {
+  width:20px; height:20px; border-radius:50%;
+  display:inline-block; box-shadow:0 2px 6px rgba(0,0,0,0.35);
+}
+.player1 { background: var(--player1-color); }
+.player2 { background: var(--player2-color); }
+.exit {
+  width:18px; height:18px; border-radius:3px;
+  background:var(--exit-color); display:inline-block;
+  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.15);
+}
+.available { background: var(--available-color); border-radius:4px; }
+
+.controls {
+  max-width:380px; display:flex; flex-direction:column; gap:12px;
+}
+.panel {
+  background:#fff; padding:12px; border-radius:8px;
+  box-shadow:0 6px 14px rgba(0,0,0,0.06);
+}
+.directions { display:flex; gap:8px; flex-wrap:wrap; }
+.dir-btn {
+  padding:8px 12px; border-radius:6px; border:1px solid #ddd;
+  background:#f6f6f6; cursor:pointer; font-weight:600;
+}
+.dir-btn:disabled { opacity:0.45; cursor:not-allowed; }
+.big { font-size:18px; font-weight:700; }
+.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+label { font-size:14px; }
+input[type="checkbox"] { transform:scale(1.15); margin-right:8px; }
+.footer-note { font-size:13px; color:#555; margin-top:6px; }
+.small { font-size:13px; color:#444; }
+
+/* Build Mode */
+.build-toolbar {
+  display:flex; gap:10px; margin-top:10px;
+}
+.build-btn {
+  padding:6px 12px; border-radius:6px; border:1px solid #aaa;
+  background:#f0f0f0; cursor:pointer; font-weight:600;
+}
+.build-btn.active { background:#ffd54f; border-color:#fbc02d; }
+
+/* Responsive */
+@media (max-width:860px) {
+  #gameScreen { flex-direction:column; align-items:center; }
+  .left { order:2; }
+  .controls { max-width:100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- Home Screen -->
+<div id="homeScreen">
+  <h1>.Hidden Maze Multiplayer</h1>
+  <input type="text" id="homeGameCode" class="home-input" placeholder="Enter game code (to join)" maxlength="8" />
+  <br>
+  <button id="btnCreate" class="home-btn create">Create New Game</button>
+  <button id="btnJoin" class="home-btn join">Join Game</button>
+</div>
+
+<!-- Game Screen -->
+<div id="gameScreen" class="hidden">
+  <div class="left">
+    <div id="board" class="board" aria-hidden="true"></div>
+    <div class="footer-note">Tip: Use arrow keys or buttons to move. Click cells to edit (creator only).</div>
+  </div>
+
+  <div class="controls">
+    <div class="panel">
+      <div class="row">
+        <div class="big">Hidden Maze</div>
+        <div style="margin-left:auto" class="small">Moves: <span id="moveCount">0</span></div>
+      </div>
+      <p class="small">You cannot see the maze. Each turn you'll be told which directions are possible.</p>
+
+      <div style="margin-top:8px">
+        <div><strong>Available moves:</strong></div>
+        <div class="directions" id="directions"></div>
+      </div>
+
+      <div style="margin-top:10px" class="row">
+        <button id="north" class="dir-btn">↑ North</button>
+        <button id="south" class="dir-btn">↓ South</button>
+        <button id="west" class="dir-btn">← West</button>
+        <button id="east" class="dir-btn">→ East</button>
+      </div>
+
+      <div style="margin-top:10px" class="row">
+        <button id="reset" class="dir-btn">New Game (same layout)</button>
+        <button id="randomize" class="dir-btn">Random start/exit</button>
+        <button id="regen" class="dir-btn">Generate Random Maze</button>
+      </div>
+
+      <div style="margin-top:10px" class="row">
+        <input id="gameCodeInput" maxlength="8" placeholder="Game code" readonly>
+        <button id="newGameCode" class="dir-btn">New Game Code</button>
+      </div>
+    </div>
+
+    <!-- Creator-only panel -->
+    <div id="creatorPanel" class="panel hidden">
+      <div class="row">
+        <strong>Maze Editor (Creator Only)</strong>
+      </div>
+      <div class="build-toolbar">
+        <button id="buildModeBtn" class="build-btn">🔨 Build Mode</button>
+        <button id="clearMazeBtn" class="build-btn">🗑️ Clear Walls</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label><input id="showVisited" type="checkbox"> Show visited tiles</label>
+        <label style="margin-left:auto"><input id="revealMap" type="checkbox"> Reveal map (cheat)</label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div><strong>Game log</strong></div>
+      <div id="log" class="small" style="max-height:180px; overflow:auto; margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// ==== Firebase Setup ====
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ==== Initial Maze ====
+let maze = [
+  ["#","#","#","#","#","#","#","#","#","#","#","#","#"],
+  ["#","S"," "," ","#"," "," "," "," "," ","E","#","#"],
+  ["#","#"," ","#","#"," ","#","#","#"," ","#","#","#"],
+  ["#"," "," "," "," "," "," ","#"," "," "," "," ","#"],
+  ["#"," ","#","#","#","#"," ","#"," ","#","#"," ","#"],
+  ["#"," ","#"," "," ","#"," ","#"," "," ","#"," ","#"],
+  ["#"," ","#"," ","#","#"," ","#"," ","#","#"," ","#"],
+  ["#"," "," "," "," "," "," "," "," "," "," "," ","#"],
+  ["#","#","#","#","#","#","#","#","#","#","#","#","#"]
+];
+
+// DOM
+const homeScreen = document.getElementById('homeScreen');
+const gameScreen = document.getElementById('gameScreen');
+const homeGameCodeInput = document.getElementById('homeGameCode');
+const boardEl = document.getElementById('board');
+const directionsEl = document.getElementById('directions');
+const moveCountEl = document.getElementById('moveCount');
+const logEl = document.getElementById('log');
+const gameCodeInput = document.getElementById('gameCodeInput');
+const creatorPanel = document.getElementById('creatorPanel');
+const showVisitedChk = document.getElementById('showVisited');
+const revealMapChk = document.getElementById('revealMap');
+const buildModeBtn = document.getElementById('buildModeBtn');
+const clearMazeBtn = document.getElementById('clearMazeBtn');
+
+// State
+let rows = maze.length;
+let cols = maze[0].length;
+let playerId = null;
+let gameCode = null;
+let players = {};
+let visited = new Set();
+let isCreator = false;
+let buildMode = false;
+
+// ==== Helpers ====
+function keyFor(r,c){ return r+','+c; }
+function findTile(tileChar){
+  for(let r=0;r<rows;r++)
+    for(let c=0;c<cols;c++)
+      if(maze[r][c]===tileChar) return [r,c];
+  return null;
+}
+
+// ==== Board ====
+function buildBoard(){
+  boardEl.innerHTML = '';
+  boardEl.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const div = document.createElement('div');
+      div.className = 'cell';
+      div.dataset.r = r;
+      div.dataset.c = c;
+      if (isCreator && buildMode) {
+        div.addEventListener('click', () => toggleCell(r, c));
+      }
+      boardEl.appendChild(div);
+    }
+  }
+  updateUI();
+}
+
+function toggleCell(r, c) {
+  // Don't allow editing borders or start/exit directly (optional: enhance later)
+  if (r === 0 || c === 0 || r === rows-1 || c === cols-1) return;
+  if (maze[r][c] === 'S' || maze[r][c] === 'E') return;
+
+  maze[r][c] = maze[r][c] === '#' ? ' ' : '#';
+  saveMazeToFirebase();
+  updateUI();
+}
+
+function saveMazeToFirebase() {
+  if (isCreator) {
+    db.ref('games/'+gameCode).update({ maze });
+  }
+}
+
+// ==== Movement Logic ====
+function inBounds(r,c){ return r>=0 && r<rows && c>=0 && c<cols; }
+function isWall(r,c){ return !inBounds(r,c) || maze[r][c]==='#'; }
+
+function possibleMoves(pos){
+  const [r,c] = pos; const moves = {};
+  if(!isWall(r-1,c)) moves.N = [r-1,c];
+  if(!isWall(r+1,c)) moves.S = [r+1,c];
+  if(!isWall(r,c-1)) moves.W = [r,c-1];
+  if(!isWall(r,c+1)) moves.E = [r,c+1];
+  return moves;
+}
+
+// ==== UI Update ====
+function updateUI(){
+  const cells = boardEl.querySelectorAll('.cell');
+  const myPos = players[playerId]?.pos;
+  const moves = myPos ? possibleMoves(myPos) : {};
+  const exitPos = findTile('E');
+
+  cells.forEach(div => {
+    const r = parseInt(div.dataset.r), c = parseInt(div.dataset.c);
+    div.className = 'cell';
+    if (maze[r][c] === '#') div.classList.add('wall');
+    else div.classList.add('path');
+
+    // Fog of war
+    if (!revealMapChk.checked || !isCreator) {
+      div.classList.add('fog');
+    }
+
+    // Visited (creator only)
+    if (isCreator && showVisitedChk.checked && visited.has(keyFor(r,c))) {
+      div.classList.remove('fog');
+      div.classList.add('visited');
+    }
+
+    // Available moves
+    for (const mv of Object.values(moves)) {
+      if (mv[0] === r && mv[1] === c) {
+        div.classList.add('available');
+        div.classList.remove('fog');
+      }
+    }
+
+    // Players
+    div.innerHTML = '';
+    for (const [id, p] of Object.entries(players)) {
+      if (p.pos[0] === r && p.pos[1] === c) {
+        const span = document.createElement('span');
+        span.className = 'player ' + (id === playerId ? 'player1' : 'player2');
+        div.appendChild(span);
+      }
+    }
+
+    // Exit: ONLY show if creator + revealMap ON
+    if (exitPos && exitPos[0] === r && exitPos[1] === c) {
+      if (isCreator && revealMapChk.checked) {
+        div.innerHTML = '<span class="exit"></span>';
+      }
+      // Otherwise, leave empty (never show during play)
+    }
+  });
+
+  // Direction buttons
+  ['N','S','E','W'].forEach(dir => {
+    const btn = document.getElementById(dir === 'N' ? 'north' : dir === 'S' ? 'south' : dir === 'W' ? 'west' : 'east');
+    btn.disabled = !moves[dir];
+  });
+
+  // Pills
+  directionsEl.innerHTML = '';
+  for (const dir of ['N','S','E','W']) {
+    if (moves[dir]) {
+      const pill = document.createElement('div');
+      pill.className = 'dir-btn';
+      pill.textContent = dir;
+      directionsEl.appendChild(pill);
+    }
+  }
+
+  moveCountEl.textContent = players[playerId]?.moves || 0;
+}
+
+// ==== Logging ====
+function log(msg){
+  const el = document.createElement('div');
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logEl.prepend(el);
+}
+function logClear(){ logEl.innerHTML = ''; }
+
+// ==== Movement ====
+function movePlayer(dir){
+  if (!playerId || !isWall) return;
+  const pos = players[playerId]?.pos;
+  if (!pos) return;
+  const moves = possibleMoves(pos);
+  if (!moves[dir]) {
+    log("You can't go that way.");
+    return;
+  }
+  players[playerId].pos = moves[dir].slice();
+  players[playerId].moves++;
+  visited.add(keyFor(...players[playerId].pos));
+  db.ref('games/'+gameCode+'/players').set(players);
+  log(`Player ${playerId} moves ${dir}.`);
+  updateUI();
+  checkWin();
+}
+
+function checkWin(){
+  const myPos = players[playerId]?.pos;
+  const exitPos = findTile('E');
+  if (myPos && exitPos && myPos[0] === exitPos[0] && myPos[1] === exitPos[1]) {
+    log(`🎉 Player ${playerId} found the exit in ${players[playerId].moves} moves!`);
+    alert(`🎉 You found the exit in ${players[playerId].moves} moves!`);
+  }
+}
+
+// ==== Firebase & Game Flow ====
+function generateCode(){
+  return Math.random().toString(36).substr(2,8).toUpperCase();
+}
+
+function createNewGame(){
+  gameCode = generateCode();
+  playerId = 'player1';
+  isCreator = true;
+  players = { [playerId]: { pos: findTile('S'), moves: 0 } };
+  visited = new Set();
+  visited.add(keyFor(...players[playerId].pos));
+
+  db.ref('games/'+gameCode).set({ maze, players });
+
+  // UI
+  gameCodeInput.value = gameCode;
+  homeScreen.classList.add('hidden');
+  gameScreen.classList.remove('hidden');
+  creatorPanel.classList.remove('hidden');
+  buildMode = false;
+  buildModeBtn.classList.remove('active');
+  buildModeBtn.textContent = '🔨 Build Mode';
+
+  buildBoard();
+  logClear();
+  log("✅ New game created! Share this code: " + gameCode);
+}
+
+function joinExistingGame(code){
+  if (!code.trim()) {
+    alert("Please enter a game code.");
+    return;
+  }
+  gameCode = code.trim().toUpperCase();
+  playerId = 'player2';
+  isCreator = false;
+
+  db.ref('games/'+gameCode).once('value').then(snap => {
+    if (!snap.exists()) {
+      alert("Game not found. Check the code.");
+      return;
+    }
+    const data = snap.val();
+    maze = data.maze;
+    rows = maze.length;
+    cols = maze[0].length;
+
+    players = data.players || {};
+    players[playerId] = { pos: findTile('S'), moves: 0 };
+    visited = new Set();
+    visited.add(keyFor(...players[playerId].pos));
+
+    db.ref('games/'+gameCode+'/players').set(players);
+
+    // UI
+    homeScreen.classList.add('hidden');
+    gameScreen.classList.remove('hidden');
+    creatorPanel.classList.add('hidden');
+    gameCodeInput.value = gameCode;
+
+    buildBoard();
+    logClear();
+    log("✅ Joined game: " + gameCode);
+
+    // Listen for player updates
+    db.ref('games/'+gameCode+'/players').on('value', snap => {
+      players = snap.val() || {};
+      updateUI();
+    });
+
+    // Listen for maze updates (if creator edits)
+    db.ref('games/'+gameCode+'/maze').on('value', snap => {
+      if (snap.exists()) {
+        maze = snap.val();
+        rows = maze.length;
+        cols = maze[0].length;
+        updateUI();
+      }
+    });
+  });
+}
+
+// ==== Maze Generation ====
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1; i>0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+function generateRandomMaze(requestedCols, requestedRows){
+  const W = requestedCols % 2 === 1 ? requestedCols : requestedCols - 1;
+  const H = requestedRows % 2 === 1 ? requestedRows : requestedRows - 1;
+  const grid = Array.from({length:H}, () => Array.from({length:W}, () => '#'));
+  function carve(x,y){
+    grid[y][x] = ' ';
+    const dirs = shuffle([[2,0],[-2,0],[0,2],[0,-2]]);
+    for(const d of dirs){
+      const nx = x + d[0], ny = y + d[1];
+      if(nx>0 && nx<W-1 && ny>0 && ny<H-1 && grid[ny][nx]==='#'){
+        grid[y + d[1]/2][x + d[0]/2] = ' ';
+        carve(nx, ny);
+      }
+    }
+  }
+  carve(1 + 2*Math.floor(Math.random()*Math.floor((W-1)/2)), 1 + 2*Math.floor(Math.random()*Math.floor((H-1)/2)));
+  const openCells = [];
+  for(let r=0; r<H; r++)
+    for(let c=0; c<W; c++)
+      if(grid[r][c] === ' ') openCells.push([r,c]);
+  if(openCells.length >= 2){
+    let i = Math.floor(Math.random()*openCells.length);
+    let j = Math.floor(Math.random()*openCells.length);
+    while(j === i) j = Math.floor(Math.random()*openCells.length);
+    const [sr,sc] = openCells[i]; const [er,ec] = openCells[j];
+    grid[sr][sc] = 'S'; grid[er][ec] = 'E';
+  }
+  return grid;
+}
+
+// ==== Event Listeners ====
+document.getElementById('btnCreate').addEventListener('click', createNewGame);
+document.getElementById('btnJoin').addEventListener('click', () => {
+  joinExistingGame(homeGameCodeInput.value);
+});
+
+// Movement
+['north','south','west','east'].forEach(dir => {
+  document.getElementById(dir).addEventListener('click', () => movePlayer(dir.toUpperCase()[0]));
+});
+
+// Game actions
+document.getElementById('reset').addEventListener('click', buildBoard);
+document.getElementById('randomize').addEventListener('click', buildBoard);
+document.getElementById('regen').addEventListener('click', () => {
+  maze = generateRandomMaze(21,15);
+  rows = maze.length;
+  cols = maze[0].length;
+  if (isCreator) saveMazeToFirebase();
+  buildBoard();
+});
+document.getElementById('newGameCode').addEventListener('click', createNewGame);
+
+// Build mode toggle
+buildModeBtn.addEventListener('click', () => {
+  buildMode = !buildMode;
+  buildModeBtn.classList.toggle('active', buildMode);
+  buildModeBtn.textContent = buildMode ? '✅ Editing ON' : '🔨 Build Mode';
+  buildBoard(); // reattach listeners
+});
+
+// Clear walls (keep borders, S, E)
+clearMazeBtn.addEventListener('click', () => {
+  if (!confirm("Clear all inner walls?")) return;
+  for (let r = 1; r < rows - 1; r++) {
+    for (let c = 1; c < cols - 1; c++) {
+      if (maze[r][c] !== 'S' && maze[r][c] !== 'E') {
+        maze[r][c] = ' ';
+      }
+    }
+  }
+  saveMazeToFirebase();
+  buildBoard();
+});
+
+// Keyboard
+window.addEventListener('keydown', (e) => {
+  if (!playerId || !isCreator && !players[playerId]) return;
+  const keyMap = {ArrowUp:'N', ArrowDown:'S', ArrowLeft:'W', ArrowRight:'E'};
+  if (keyMap[e.key]) movePlayer(keyMap[e.key]);
+});
+
+// Creator-only toggles
+showVisitedChk?.addEventListener('change', updateUI);
+revealMapChk?.addEventListener('change', updateUI);
+</script>
+</body>
+</html>
