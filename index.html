@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Hidden Maze Multiplayer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hidden Maze — Multiplayer (Local)</title>
 <style>
 :root{
   --cell-size:36px; --wall-color:#111; --path-color:#eee;
-  --fog-color:#999; --player1-color:#1976d2; --player2-color:#d32f2f;
-  --exit-color:#2e7d32; --visited-color:#dfefff; --available-color:#f9d835;
+  --fog-color:#444; --player-you-color:#1976d2;
+  --exit-color:#2e7d32; --available-color:#f9d835;
+  --other-player-color:#e91e63;
 }
 body{
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
@@ -16,58 +17,83 @@ body{
   display:flex; flex-direction:column; align-items:center;
   background:#fafafa;
 }
-#homeScreen, #gameScreen { width:100%; max-width:1000px; }
-#homeScreen {
-  text-align:center; padding:40px 20px;
-}
-#homeScreen h1 { font-size:2.4rem; margin-bottom:32px; color:#222; }
-.home-btn {
-  display:inline-block; margin:12px;
-  padding:16px 40px; font-size:1.2rem; font-weight:600;
-  border:none; border-radius:10px; color:white; cursor:pointer;
-  transition:opacity 0.2s;
-}
-.home-btn.create { background:#1976d2; }
-.home-btn.join { background:#d32f2f; }
-.home-btn:hover { opacity:0.9; }
-.home-input {
-  margin:20px 0; padding:12px; font-size:1.1rem;
-  width:220px; text-align:center; border:2px solid #ccc; border-radius:8px;
-}
+.screen { width:100%; max-width:1000px; }
 .hidden { display:none !important; }
 
-/* Game Layout */
+/* Auth & Home */
+.auth-screen { text-align:center; padding:40px 20px; }
+.auth-screen input {
+  padding:12px; width:100%; max-width:300px; font-size:1rem;
+  border:2px solid #ccc; border-radius:8px; margin:8px 0;
+}
+.auth-screen button {
+  margin:10px 6px; padding:12px 24px; font-size:1.1rem; font-weight:600;
+  border:none; border-radius:8px; color:white; cursor:pointer;
+  background:#1976d2;
+}
+.auth-screen button.secondary { background:#757575; }
+.error { color:#d32f2f; margin-top:12px; min-height:20px; }
+
+#homeScreen { text-align:center; padding:30px 20px; }
+.home-btn {
+  display:inline-block; margin:10px;
+  padding:14px 32px; font-size:1.2rem; font-weight:600;
+  border:none; border-radius:10px; color:white; cursor:pointer;
+  background:#1976d2;
+}
+.home-btn.join { background:#d32f2f; }
+.home-btn.delete { background:#f44336; }
+.home-btn.leave { background:#9c27b0; }
+.game-input { padding:12px; font-size:1.1rem; width:220px; text-align:center; border:2px solid #ccc; border-radius:8px; }
+
+/* Game UI */
+#gameHeader {
+  width:100%; max-width:1000px;
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:12px;
+}
+#gameTitle {
+  font-size:1.3rem; font-weight:bold;
+}
+#playerInfo {
+  font-size:1.1rem; color:#1976d2;
+}
 #gameScreen {
   display:flex; gap:24px; align-items:flex-start;
   width:100%;
 }
-.left { width:max-content; }
+.left-info {
+  width:220px;
+  display:flex; flex-direction:column; gap:12px;
+}
 .board {
-  display:grid; gap:2px; background:#444;
+  display:grid; gap:2px; background:#333;
   padding:6px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.15);
+  margin-top:30px;
 }
 .cell {
   width:var(--cell-size); height:var(--cell-size);
   display:flex; align-items:center; justify-content:center;
   font-size:14px; user-select:none; border-radius:4px; box-sizing:border-box;
-  cursor: pointer;
 }
 .wall { background: var(--wall-color); }
 .path { background: var(--path-color); }
-.fog { background: var(--fog-color); filter:brightness(.95); }
-.visited { background: var(--visited-color); }
-.player {
+.available { background: var(--available-color); }
+.player-you {
   width:20px; height:20px; border-radius:50%;
   display:inline-block; box-shadow:0 2px 6px rgba(0,0,0,0.35);
+  background: var(--player-you-color);
 }
-.player1 { background: var(--player1-color); }
-.player2 { background: var(--player2-color); }
+.player-other {
+  width:16px; height:16px; border-radius:50%;
+  display:inline-block; box-shadow:0 1px 3px rgba(0,0,0,0.4);
+  background: var(--other-player-color);
+}
 .exit {
   width:18px; height:18px; border-radius:3px;
   background:var(--exit-color); display:inline-block;
   box-shadow: inset 0 -2px 6px rgba(0,0,0,0.15);
 }
-.available { background: var(--available-color); border-radius:4px; }
 
 .controls {
   max-width:380px; display:flex; flex-direction:column; gap:12px;
@@ -76,422 +102,202 @@ body{
   background:#fff; padding:12px; border-radius:8px;
   box-shadow:0 6px 14px rgba(0,0,0,0.06);
 }
-.directions { display:flex; gap:8px; flex-wrap:wrap; }
+.mode-toggle {
+  padding:10px; font-weight:600; border:none; border-radius:6px;
+  cursor:pointer; width:100%;
+}
+.mode-toggle.edit { background:#ffd54f; color:#5d4037; }
+.mode-toggle.play { background:#4caf50; color:white; }
 .dir-btn {
   padding:8px 12px; border-radius:6px; border:1px solid #ddd;
   background:#f6f6f6; cursor:pointer; font-weight:600;
 }
 .dir-btn:disabled { opacity:0.45; cursor:not-allowed; }
-.big { font-size:18px; font-weight:700; }
-.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-label { font-size:14px; }
-input[type="checkbox"] { transform:scale(1.15); margin-right:8px; }
-.footer-note { font-size:13px; color:#555; margin-top:6px; }
 .small { font-size:13px; color:#444; }
+.footer-note { font-size:13px; color:#555; margin-top:6px; }
 
-/* Build Mode */
-.build-toolbar {
-  display:flex; gap:10px; margin-top:10px;
+.library-section {
+  margin:20px 0;
+  text-align:left;
+  padding:0 20px;
+  width:100%;
+  max-width:600px;
 }
-.build-btn {
-  padding:6px 12px; border-radius:6px; border:1px solid #aaa;
-  background:#f0f0f0; cursor:pointer; font-weight:600;
-}
-.build-btn.active { background:#ffd54f; border-color:#fbc02d; }
-
-/* Responsive */
-@media (max-width:860px) {
-  #gameScreen { flex-direction:column; align-items:center; }
-  .left { order:2; }
-  .controls { max-width:100%; }
+.library-section h3 {
+  margin:15px 0 8px;
+  color:#333;
 }
 </style>
 </head>
 <body>
 
+<!-- Login Screen -->
+<div id="loginScreen" class="auth-screen screen">
+  <h1>🔐 Hidden Maze Login</h1>
+  <input type="text" id="loginUsername" placeholder="Username" autocomplete="off" />
+  <input type="password" id="loginPassword" placeholder="Password" />
+  <button id="btnLogin">Log In</button>
+  <button id="btnCreateAccount" class="secondary">Create Account</button>
+  <div id="loginError" class="error"></div>
+</div>
+
+<!-- Create Account Screen -->
+<div id="createAccountScreen" class="auth-screen screen hidden">
+  <h1>🆕 Create Account</h1>
+  <input type="text" id="newUsername" placeholder="Choose username" autocomplete="off" />
+  <input type="password" id="newPassword" placeholder="Choose password" />
+  <input type="password" id="confirmPassword" placeholder="Confirm password" />
+  <button id="btnSubmitCreate">Create Account</button>
+  <button id="btnBackToLogin" class="secondary">← Back to Login</button>
+  <div id="createError" class="error"></div>
+</div>
+
 <!-- Home Screen -->
-<div id="homeScreen">
-  <h1>.Hidden Maze Multiplayer</h1>
-  <input type="text" id="homeGameCode" class="home-input" placeholder="Enter game code (to join)" maxlength="8" />
+<div id="homeScreen" class="screen hidden">
+  <h1>Hidden Maze — Welcome <span id="welcomeUser"></span></h1>
+  <input type="text" id="homeGameCode" class="game-input" placeholder="Enter game code to join" maxlength="8" />
   <br>
-  <button id="btnCreate" class="home-btn create">Create New Game</button>
-  <button id="btnJoin" class="home-btn join">Join Game</button>
+  <button id="btnJoinHome" class="home-btn join">Join Game</button>
+  
+  <div style="margin:30px 0;">
+    <h2>Create New Game</h2>
+    <input type="text" id="gameNameInput" placeholder="Game Name" maxlength="20" style="padding:10px; width:200px; margin:10px;">
+    <select id="mazeSizeSelect" style="padding:8px; margin:10px;">
+      <option value="9">9x9</option>
+      <option value="13">13x13</option>
+      <option value="17">17x17</option>
+      <option value="21" selected>21x21</option>
+    </select>
+    <br>
+    <button id="btnCreateHome" class="home-btn">Create New Game</button>
+  </div>
+
+  <div class="library-section">
+    <h3>Your Created Games</h3>
+    <div id="createdGames"></div>
+  </div>
+
+  <div class="library-section">
+    <h3>Joined Games</h3>
+    <div id="joinedGames"></div>
+  </div>
+
+  <div style="margin-top:30px;">
+    <button id="btnLogoutHome" class="home-btn" style="background:#f44336;">Logout</button>
+  </div>
 </div>
 
 <!-- Game Screen -->
-<div id="gameScreen" class="hidden">
-  <div class="left">
-    <div id="board" class="board" aria-hidden="true"></div>
-    <div class="footer-note">Tip: Use arrow keys or buttons to move. Click cells to edit (creator only).</div>
-  </div>
-
-  <div class="controls">
-    <div class="panel">
-      <div class="row">
-        <div class="big">Hidden Maze</div>
-        <div style="margin-left:auto" class="small">Moves: <span id="moveCount">0</span></div>
-      </div>
-      <p class="small">You cannot see the maze. Each turn you'll be told which directions are possible.</p>
-
-      <div style="margin-top:8px">
-        <div><strong>Available moves:</strong></div>
-        <div class="directions" id="directions"></div>
+<div id="gameScreen" class="screen hidden">
+  <div style="display:flex; gap:24px; width:100%;">
+    <!-- LEFT: Info Panel -->
+    <div class="left-info">
+      <div>
+        <div id="gameTitle">Game: <span id="gameNameDisplay">—</span></div>
+        <div>Code: <span id="gameCodeDisplay">—</span></div>
+        <div>Player: <span id="usernameDisplay">—</span></div>
       </div>
 
-      <div style="margin-top:10px" class="row">
-        <button id="north" class="dir-btn">↑ North</button>
-        <button id="south" class="dir-btn">↓ South</button>
-        <button id="west" class="dir-btn">← West</button>
-        <button id="east" class="dir-btn">→ East</button>
+      <div class="panel">
+        <div id="modeToggleContainer"></div>
+        <div id="playControls" style="margin-top:12px;">
+          <p class="small" id="controlsNote">Use arrow keys or buttons to move.</p>
+          <div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;">
+            <button id="north" class="dir-btn">↑ North</button>
+            <button id="south" class="dir-btn">↓ South</button>
+            <button id="west"  class="dir-btn">← West</button>
+            <button id="east"  class="dir-btn">→ East</button>
+          </div>
+        </div>
       </div>
 
-      <div style="margin-top:10px" class="row">
-        <button id="reset" class="dir-btn">New Game (same layout)</button>
-        <button id="randomize" class="dir-btn">Random start/exit</button>
-        <button id="regen" class="dir-btn">Generate Random Maze</button>
+      <div class="panel">
+        <div><strong>Game log</strong></div>
+        <div id="log" class="small" style="max-height:150px; overflow:auto; margin-top:8px;"></div>
       </div>
 
-      <div style="margin-top:10px" class="row">
-        <input id="gameCodeInput" maxlength="8" placeholder="Game code" readonly>
-        <button id="newGameCode" class="dir-btn">New Game Code</button>
-      </div>
+      <button id="btnLeaveGame" class="home-btn leave" style="padding:8px; font-size:1rem;">Leave Game</button>
+      <button id="btnBackToHome" class="home-btn" style="padding:8px; font-size:1rem; background:#9e9e9e;">← Back to Home</button>
     </div>
 
-    <!-- Creator-only panel -->
-    <div id="creatorPanel" class="panel hidden">
-      <div class="row">
-        <strong>Maze Editor (Creator Only)</strong>
-      </div>
-      <div class="build-toolbar">
-        <button id="buildModeBtn" class="build-btn">🔨 Build Mode</button>
-        <button id="clearMazeBtn" class="build-btn">🗑️ Clear Walls</button>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <label><input id="showVisited" type="checkbox"> Show visited tiles</label>
-        <label style="margin-left:auto"><input id="revealMap" type="checkbox"> Reveal map (cheat)</label>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div><strong>Game log</strong></div>
-      <div id="log" class="small" style="max-height:180px; overflow:auto; margin-top:8px;"></div>
+    <!-- RIGHT: Maze Board -->
+    <div>
+      <div id="board" class="board"></div>
+      <div class="footer-note" id="modeNote">Loading...</div>
     </div>
   </div>
 </div>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
 <script>
-// ==== Firebase Setup ====
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+// ==== Constants ====
+const ACCOUNTS_KEY = 'maze_accounts_v8';
+const SESSION_USER = 'maze_session_user';
+const SESSION_GAME = 'maze_current_game';
+const MAZE_PREFIX = 'maze_shared_maze_';
+const GAME_INFO_PREFIX = 'maze_game_info_';
+const EXIT_POS_PREFIX = 'maze_exit_pos_';
+const PLAYER_POS_PREFIX = 'maze_player_pos_';
 
-// ==== Initial Maze ====
-let maze = [
-  ["#","#","#","#","#","#","#","#","#","#","#","#","#"],
-  ["#","S"," "," ","#"," "," "," "," "," ","E","#","#"],
-  ["#","#"," ","#","#"," ","#","#","#"," ","#","#","#"],
-  ["#"," "," "," "," "," "," ","#"," "," "," "," ","#"],
-  ["#"," ","#","#","#","#"," ","#"," ","#","#"," ","#"],
-  ["#"," ","#"," "," ","#"," ","#"," "," ","#"," ","#"],
-  ["#"," ","#"," ","#","#"," ","#"," ","#","#"," ","#"],
-  ["#"," "," "," "," "," "," "," "," "," "," "," ","#"],
-  ["#","#","#","#","#","#","#","#","#","#","#","#","#"]
-];
-
-// DOM
-const homeScreen = document.getElementById('homeScreen');
-const gameScreen = document.getElementById('gameScreen');
-const homeGameCodeInput = document.getElementById('homeGameCode');
-const boardEl = document.getElementById('board');
-const directionsEl = document.getElementById('directions');
-const moveCountEl = document.getElementById('moveCount');
-const logEl = document.getElementById('log');
-const gameCodeInput = document.getElementById('gameCodeInput');
-const creatorPanel = document.getElementById('creatorPanel');
-const showVisitedChk = document.getElementById('showVisited');
-const revealMapChk = document.getElementById('revealMap');
-const buildModeBtn = document.getElementById('buildModeBtn');
-const clearMazeBtn = document.getElementById('clearMazeBtn');
-
-// State
-let rows = maze.length;
-let cols = maze[0].length;
-let playerId = null;
-let gameCode = null;
-let players = {};
-let visited = new Set();
-let isCreator = false;
-let buildMode = false;
-
-// ==== Helpers ====
-function keyFor(r,c){ return r+','+c; }
-function findTile(tileChar){
-  for(let r=0;r<rows;r++)
-    for(let c=0;c<cols;c++)
-      if(maze[r][c]===tileChar) return [r,c];
-  return null;
+function getModeKey(gameCode, username) {
+  return `maze_mode_${gameCode}_${username}`;
 }
 
-// ==== Board ====
-function buildBoard(){
-  boardEl.innerHTML = '';
-  boardEl.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
-  for(let r=0;r<rows;r++){
-    for(let c=0;c<cols;c++){
-      const div = document.createElement('div');
-      div.className = 'cell';
-      div.dataset.r = r;
-      div.dataset.c = c;
-      if (isCreator && buildMode) {
-        div.addEventListener('click', () => toggleCell(r, c));
-      }
-      boardEl.appendChild(div);
-    }
-  }
-  updateUI();
+// ==== Auth ====
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function toggleCell(r, c) {
-  // Don't allow editing borders or start/exit directly (optional: enhance later)
-  if (r === 0 || c === 0 || r === rows-1 || c === cols-1) return;
-  if (maze[r][c] === 'S' || maze[r][c] === 'E') return;
-
-  maze[r][c] = maze[r][c] === '#' ? ' ' : '#';
-  saveMazeToFirebase();
-  updateUI();
+function getAccounts() {
+  const saved = localStorage.getItem(ACCOUNTS_KEY);
+  return saved ? JSON.parse(saved) : {};
 }
-
-function saveMazeToFirebase() {
-  if (isCreator) {
-    db.ref('games/'+gameCode).update({ maze });
-  }
+function saveAccounts(accounts) {
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
 }
-
-// ==== Movement Logic ====
-function inBounds(r,c){ return r>=0 && r<rows && c>=0 && c<cols; }
-function isWall(r,c){ return !inBounds(r,c) || maze[r][c]==='#'; }
-
-function possibleMoves(pos){
-  const [r,c] = pos; const moves = {};
-  if(!isWall(r-1,c)) moves.N = [r-1,c];
-  if(!isWall(r+1,c)) moves.S = [r+1,c];
-  if(!isWall(r,c-1)) moves.W = [r,c-1];
-  if(!isWall(r,c+1)) moves.E = [r,c+1];
-  return moves;
+async function createAccount(username, password) {
+  const accounts = getAccounts();
+  if (accounts[username]) return false;
+  const hash = await sha256(password);
+  accounts[username] = hash;
+  saveAccounts(accounts);
+  return true;
 }
-
-// ==== UI Update ====
-function updateUI(){
-  const cells = boardEl.querySelectorAll('.cell');
-  const myPos = players[playerId]?.pos;
-  const moves = myPos ? possibleMoves(myPos) : {};
-  const exitPos = findTile('E');
-
-  cells.forEach(div => {
-    const r = parseInt(div.dataset.r), c = parseInt(div.dataset.c);
-    div.className = 'cell';
-    if (maze[r][c] === '#') div.classList.add('wall');
-    else div.classList.add('path');
-
-    // Fog of war
-    if (!revealMapChk.checked || !isCreator) {
-      div.classList.add('fog');
-    }
-
-    // Visited (creator only)
-    if (isCreator && showVisitedChk.checked && visited.has(keyFor(r,c))) {
-      div.classList.remove('fog');
-      div.classList.add('visited');
-    }
-
-    // Available moves
-    for (const mv of Object.values(moves)) {
-      if (mv[0] === r && mv[1] === c) {
-        div.classList.add('available');
-        div.classList.remove('fog');
-      }
-    }
-
-    // Players
-    div.innerHTML = '';
-    for (const [id, p] of Object.entries(players)) {
-      if (p.pos[0] === r && p.pos[1] === c) {
-        const span = document.createElement('span');
-        span.className = 'player ' + (id === playerId ? 'player1' : 'player2');
-        div.appendChild(span);
-      }
-    }
-
-    // Exit: ONLY show if creator + revealMap ON
-    if (exitPos && exitPos[0] === r && exitPos[1] === c) {
-      if (isCreator && revealMapChk.checked) {
-        div.innerHTML = '<span class="exit"></span>';
-      }
-      // Otherwise, leave empty (never show during play)
-    }
-  });
-
-  // Direction buttons
-  ['N','S','E','W'].forEach(dir => {
-    const btn = document.getElementById(dir === 'N' ? 'north' : dir === 'S' ? 'south' : dir === 'W' ? 'west' : 'east');
-    btn.disabled = !moves[dir];
-  });
-
-  // Pills
-  directionsEl.innerHTML = '';
-  for (const dir of ['N','S','E','W']) {
-    if (moves[dir]) {
-      const pill = document.createElement('div');
-      pill.className = 'dir-btn';
-      pill.textContent = dir;
-      directionsEl.appendChild(pill);
-    }
-  }
-
-  moveCountEl.textContent = players[playerId]?.moves || 0;
+async function login(username, password) {
+  const accounts = getAccounts();
+  if (!accounts[username]) return false;
+  const hash = await sha256(password);
+  return hash === accounts[username];
 }
-
-// ==== Logging ====
-function log(msg){
-  const el = document.createElement('div');
-  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-  logEl.prepend(el);
-}
-function logClear(){ logEl.innerHTML = ''; }
-
-// ==== Movement ====
-function movePlayer(dir){
-  if (!playerId || !isWall) return;
-  const pos = players[playerId]?.pos;
-  if (!pos) return;
-  const moves = possibleMoves(pos);
-  if (!moves[dir]) {
-    log("You can't go that way.");
-    return;
-  }
-  players[playerId].pos = moves[dir].slice();
-  players[playerId].moves++;
-  visited.add(keyFor(...players[playerId].pos));
-  db.ref('games/'+gameCode+'/players').set(players);
-  log(`Player ${playerId} moves ${dir}.`);
-  updateUI();
-  checkWin();
-}
-
-function checkWin(){
-  const myPos = players[playerId]?.pos;
-  const exitPos = findTile('E');
-  if (myPos && exitPos && myPos[0] === exitPos[0] && myPos[1] === exitPos[1]) {
-    log(`🎉 Player ${playerId} found the exit in ${players[playerId].moves} moves!`);
-    alert(`🎉 You found the exit in ${players[playerId].moves} moves!`);
-  }
-}
-
-// ==== Firebase & Game Flow ====
-function generateCode(){
-  return Math.random().toString(36).substr(2,8).toUpperCase();
-}
-
-function createNewGame(){
-  gameCode = generateCode();
-  playerId = 'player1';
-  isCreator = true;
-  players = { [playerId]: { pos: findTile('S'), moves: 0 } };
-  visited = new Set();
-  visited.add(keyFor(...players[playerId].pos));
-
-  db.ref('games/'+gameCode).set({ maze, players });
-
-  // UI
-  gameCodeInput.value = gameCode;
-  homeScreen.classList.add('hidden');
-  gameScreen.classList.remove('hidden');
-  creatorPanel.classList.remove('hidden');
-  buildMode = false;
-  buildModeBtn.classList.remove('active');
-  buildModeBtn.textContent = '🔨 Build Mode';
-
-  buildBoard();
-  logClear();
-  log("✅ New game created! Share this code: " + gameCode);
-}
-
-function joinExistingGame(code){
-  if (!code.trim()) {
-    alert("Please enter a game code.");
-    return;
-  }
-  gameCode = code.trim().toUpperCase();
-  playerId = 'player2';
-  isCreator = false;
-
-  db.ref('games/'+gameCode).once('value').then(snap => {
-    if (!snap.exists()) {
-      alert("Game not found. Check the code.");
-      return;
-    }
-    const data = snap.val();
-    maze = data.maze;
-    rows = maze.length;
-    cols = maze[0].length;
-
-    players = data.players || {};
-    players[playerId] = { pos: findTile('S'), moves: 0 };
-    visited = new Set();
-    visited.add(keyFor(...players[playerId].pos));
-
-    db.ref('games/'+gameCode+'/players').set(players);
-
-    // UI
-    homeScreen.classList.add('hidden');
-    gameScreen.classList.remove('hidden');
-    creatorPanel.classList.add('hidden');
-    gameCodeInput.value = gameCode;
-
-    buildBoard();
-    logClear();
-    log("✅ Joined game: " + gameCode);
-
-    // Listen for player updates
-    db.ref('games/'+gameCode+'/players').on('value', snap => {
-      players = snap.val() || {};
-      updateUI();
-    });
-
-    // Listen for maze updates (if creator edits)
-    db.ref('games/'+gameCode+'/maze').on('value', snap => {
-      if (snap.exists()) {
-        maze = snap.val();
-        rows = maze.length;
-        cols = maze[0].length;
-        updateUI();
-      }
-    });
-  });
+function setCurrentUser(username) { sessionStorage.setItem(SESSION_USER, username); }
+function getCurrentUser() { return sessionStorage.getItem(SESSION_USER); }
+function setCurrentGame(code) { sessionStorage.setItem(SESSION_GAME, code); }
+function getCurrentGame() { return sessionStorage.getItem(SESSION_GAME); }
+function clearCurrentGame() { sessionStorage.removeItem(SESSION_GAME); }
+function logout() {
+  sessionStorage.removeItem(SESSION_USER);
+  sessionStorage.removeItem(SESSION_GAME);
 }
 
 // ==== Maze Generation ====
-function shuffle(arr){
-  const a = arr.slice();
-  for(let i=a.length-1; i>0; i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [a[i],a[j]] = [a[j],a[i]];
-  }
-  return a;
-}
-function generateRandomMaze(requestedCols, requestedRows){
-  const W = requestedCols % 2 === 1 ? requestedCols : requestedCols - 1;
-  const H = requestedRows % 2 === 1 ? requestedRows : requestedRows - 1;
+function generateRandomMaze(rows, cols) {
+  const W = cols;
+  const H = rows;
   const grid = Array.from({length:H}, () => Array.from({length:W}, () => '#'));
+  for (let c = 0; c < W; c++) { grid[0][c] = '#'; grid[H-1][c] = '#'; }
+  for (let r = 0; r < H; r++) { grid[r][0] = '#'; grid[r][W-1] = '#'; }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for(let i=a.length-1; i>0; i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  }
+
   function carve(x,y){
     grid[y][x] = ' ';
     const dirs = shuffle([[2,0],[-2,0],[0,2],[0,-2]]);
@@ -503,76 +309,678 @@ function generateRandomMaze(requestedCols, requestedRows){
       }
     }
   }
-  carve(1 + 2*Math.floor(Math.random()*Math.floor((W-1)/2)), 1 + 2*Math.floor(Math.random()*Math.floor((H-1)/2)));
-  const openCells = [];
-  for(let r=0; r<H; r++)
-    for(let c=0; c<W; c++)
-      if(grid[r][c] === ' ') openCells.push([r,c]);
-  if(openCells.length >= 2){
-    let i = Math.floor(Math.random()*openCells.length);
-    let j = Math.floor(Math.random()*openCells.length);
-    while(j === i) j = Math.floor(Math.random()*openCells.length);
-    const [sr,sc] = openCells[i]; const [er,ec] = openCells[j];
-    grid[sr][sc] = 'S'; grid[er][ec] = 'E';
-  }
+  carve(2, 2);
   return grid;
 }
 
-// ==== Event Listeners ====
-document.getElementById('btnCreate').addEventListener('click', createNewGame);
-document.getElementById('btnJoin').addEventListener('click', () => {
-  joinExistingGame(homeGameCodeInput.value);
-});
+// ==== Game Metadata ====
+function saveGameInfo(gameCode, gameName, creator) {
+  const key = GAME_INFO_PREFIX + gameCode;
+  localStorage.setItem(key, JSON.stringify({ gameName, creator }));
+}
+function loadGameInfo(gameCode) {
+  const key = GAME_INFO_PREFIX + gameCode;
+  const infoStr = localStorage.getItem(key);
+  if (!infoStr) return null;
+  try {
+    return JSON.parse(infoStr);
+  } catch (e) {
+    return null;
+  }
+}
+function saveExitPosition(gameCode, pos) {
+  localStorage.setItem(EXIT_POS_PREFIX + gameCode, JSON.stringify(pos));
+}
+function loadExitPosition(gameCode) {
+  const str = localStorage.getItem(EXIT_POS_PREFIX + gameCode);
+  if (!str) return null;
+  try {
+    return JSON.parse(str);
+  } catch (e) {
+    return null;
+  }
+}
 
-// Movement
-['north','south','west','east'].forEach(dir => {
-  document.getElementById(dir).addEventListener('click', () => movePlayer(dir.toUpperCase()[0]));
-});
+// ==== Game Deletion ====
+function deleteGame(gameCode, creator) {
+  const user = getCurrentUser();
+  if (user !== creator) return false;
 
-// Game actions
-document.getElementById('reset').addEventListener('click', buildBoard);
-document.getElementById('randomize').addEventListener('click', buildBoard);
-document.getElementById('regen').addEventListener('click', () => {
-  maze = generateRandomMaze(21,15);
-  rows = maze.length;
-  cols = maze[0].length;
-  if (isCreator) saveMazeToFirebase();
-  buildBoard();
-});
-document.getElementById('newGameCode').addEventListener('click', createNewGame);
+  localStorage.removeItem(MAZE_PREFIX + gameCode);
+  localStorage.removeItem(GAME_INFO_PREFIX + gameCode);
+  localStorage.removeItem(EXIT_POS_PREFIX + gameCode);
 
-// Build mode toggle
-buildModeBtn.addEventListener('click', () => {
-  buildMode = !buildMode;
-  buildModeBtn.classList.toggle('active', buildMode);
-  buildModeBtn.textContent = buildMode ? '✅ Editing ON' : '🔨 Build Mode';
-  buildBoard(); // reattach listeners
-});
+  for (let key in localStorage) {
+    if (key.startsWith(PLAYER_POS_PREFIX) && key.endsWith(`_${gameCode}`)) {
+      localStorage.removeItem(key);
+    }
+  }
 
-// Clear walls (keep borders, S, E)
-clearMazeBtn.addEventListener('click', () => {
-  if (!confirm("Clear all inner walls?")) return;
+  if (getCurrentGame() === gameCode) {
+    clearCurrentGame();
+  }
+
+  return true;
+}
+
+// ==== Leave Game ====
+function leaveGame(gameCode, username) {
+  const posKey = `${PLAYER_POS_PREFIX}${username}_${gameCode}`;
+  localStorage.removeItem(posKey);
+  clearCurrentGame();
+  showScreen('homeScreen');
+  refreshGameLibrary();
+}
+
+// ==== State ====
+let currentUsername = null;
+let maze = [];
+let playerPos = [1, 1];
+let moves = 0;
+let gameCode = null;
+let isCreator = false;
+let currentMode = 'play';
+let rows = 0, cols = 0;
+let exitPos = null;
+
+// DOM
+const loginScreen = document.getElementById('loginScreen');
+const createAccountScreen = document.getElementById('createAccountScreen');
+const homeScreen = document.getElementById('homeScreen');
+const gameScreen = document.getElementById('gameScreen');
+const welcomeUser = document.getElementById('welcomeUser');
+const createdGamesEl = document.getElementById('createdGames');
+const joinedGamesEl = document.getElementById('joinedGames');
+const boardEl = document.getElementById('board');
+const logEl = document.getElementById('log');
+const usernameDisplay = document.getElementById('usernameDisplay');
+const gameCodeDisplay = document.getElementById('gameCodeDisplay');
+const gameNameDisplay = document.getElementById('gameNameDisplay');
+const modeToggleContainer = document.getElementById('modeToggleContainer');
+const playControls = document.getElementById('playControls');
+const modeNote = document.getElementById('modeNote');
+const btnLeaveGame = document.getElementById('btnLeaveGame');
+const controlsNote = document.getElementById('controlsNote');
+
+// ==== Helpers ====
+function getOpenCells() {
+  const open = [];
   for (let r = 1; r < rows - 1; r++) {
     for (let c = 1; c < cols - 1; c++) {
-      if (maze[r][c] !== 'S' && maze[r][c] !== 'E') {
-        maze[r][c] = ' ';
+      if (maze[r][c] !== '#') open.push([r, c]);
+    }
+  }
+  return open;
+}
+
+function getRandomOpenCell(exclude = []) {
+  const open = getOpenCells().filter(cell => 
+    !exclude.some(e => e[0] === cell[0] && e[1] === cell[1])
+  );
+  if (open.length === 0) return [1,1];
+  return open[Math.floor(Math.random() * open.length)];
+}
+
+function inBounds(r,c){ return r>=0 && r<rows && c>=0 && c<cols; }
+function isWall(r,c){ return !inBounds(r,c) || maze[r][c]==='#'; }
+function possibleMoves([r,c]) {
+  const moves = {};
+  if (!isWall(r-1,c)) moves.N = [r-1,c];
+  if (!isWall(r+1,c)) moves.S = [r+1,c];
+  if (!isWall(r,c-1)) moves.W = [r,c-1];
+  if (!isWall(r,c+1)) moves.E = [r,c+1];
+  return moves;
+}
+
+function getAllPlayerPositions() {
+  const allPlayers = [];
+  for (let key in localStorage) {
+    if (key.startsWith(PLAYER_POS_PREFIX) && key.endsWith(`_${gameCode}`)) {
+      const username = key.replace(PLAYER_POS_PREFIX, '').replace(`_${gameCode}`, '');
+      try {
+        const posStr = localStorage.getItem(key);
+        if (posStr) {
+          const pos = JSON.parse(posStr);
+          allPlayers.push({
+            username: username,
+            pos: pos,
+            isCurrent: username === currentUsername
+          });
+        }
+      } catch (e) {}
+    }
+  }
+  return allPlayers;
+}
+
+function savePlayerPosition() {
+  if (!currentUsername || !gameCode) return;
+  const key = `${PLAYER_POS_PREFIX}${currentUsername}_${gameCode}`;
+  localStorage.setItem(key, JSON.stringify(playerPos));
+}
+
+function loadSharedMaze(gameCodeToLoad) {
+  const mazeKey = MAZE_PREFIX + gameCodeToLoad;
+  const mazeStr = localStorage.getItem(mazeKey);
+  if (!mazeStr) return null;
+  try {
+    return JSON.parse(mazeStr);
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveSharedMaze() {
+  if (!isCreator || !gameCode) return;
+  const mazeKey = MAZE_PREFIX + gameCode;
+  localStorage.setItem(mazeKey, JSON.stringify(maze));
+}
+
+// ==== Board Rendering ====
+function renderBoard() {
+  boardEl.innerHTML = '';
+
+  const allPlayers = getAllPlayerPositions();
+
+  if (currentMode === 'edit') {
+    boardEl.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const div = document.createElement('div');
+        div.className = 'cell';
+
+        if (maze[r][c] === '#') {
+          div.classList.add('wall');
+        } else {
+          div.classList.add('path');
+        }
+
+        allPlayers.forEach(p => {
+          if (p.pos[0] === r && p.pos[1] === c) {
+            const dot = document.createElement('div');
+            dot.className = p.isCurrent ? 'player-you' : 'player-other';
+            if (!p.isCurrent) dot.title = `Player: ${p.username}`;
+            div.appendChild(dot);
+          }
+        });
+
+        if (exitPos && exitPos[0] === r && exitPos[1] === c) {
+          const exit = document.createElement('div');
+          exit.className = 'exit';
+          div.appendChild(exit);
+        }
+
+        if (isCreator) {
+          div.addEventListener('click', () => {
+            if (r === 0 || c === 0 || r === rows-1 || c === cols-1) return;
+            if (!(exitPos && exitPos[0] === r && exitPos[1] === c)) {
+              maze[r][c] = maze[r][c] === '#' ? ' ' : '#';
+              saveSharedMaze();
+              renderBoard();
+            }
+          });
+        }
+
+        boardEl.appendChild(div);
+      }
+    }
+  } else {
+    const [pr, pc] = playerPos;
+    boardEl.style.gridTemplateColumns = `repeat(3, var(--cell-size))`;
+
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const r = pr + dr;
+        const c = pc + dc;
+        const div = document.createElement('div');
+        div.className = 'cell';
+
+        if (r < 0 || r >= rows || c < 0 || c >= cols) {
+          div.classList.add('wall');
+        } else {
+          if (maze[r][c] === '#') {
+            div.classList.add('wall');
+          } else {
+            div.classList.add('path');
+          }
+
+          const moves = possibleMoves(playerPos);
+          for (const [dir, [mr, mc]] of Object.entries(moves)) {
+            if (mr === r && mc === c) {
+              div.classList.add('available');
+            }
+          }
+
+          if (r === pr && c === pc) {
+            allPlayers.forEach(p => {
+              if (p.pos[0] === r && p.pos[1] === c) {
+                const dot = document.createElement('div');
+                dot.className = p.isCurrent ? 'player-you' : 'player-other';
+                if (!p.isCurrent) dot.title = `Player: ${p.username}`;
+                div.appendChild(dot);
+              }
+            });
+
+            if (exitPos && exitPos[0] === r && exitPos[1] === c) {
+              const exit = document.createElement('div');
+              exit.className = 'exit';
+              div.appendChild(exit);
+            }
+          }
+        }
+
+        boardEl.appendChild(div);
+      }
+    }
+
+    const dirs = possibleMoves(playerPos);
+    document.getElementById('north').disabled = !dirs.N;
+    document.getElementById('south').disabled = !dirs.S;
+    document.getElementById('west').disabled  = !dirs.W;
+    document.getElementById('east').disabled  = !dirs.E;
+  }
+}
+
+// ==== UI ====
+function updateModeUI() {
+  modeToggleContainer.innerHTML = '';
+
+  if (isCreator) {
+    const btn = document.createElement('button');
+    btn.className = currentMode === 'edit' ? 'mode-toggle edit' : 'mode-toggle play';
+    btn.textContent = currentMode === 'edit' ? 'Switch to Play Mode' : 'Switch to Edit Mode';
+    btn.addEventListener('click', () => {
+      currentMode = currentMode === 'edit' ? 'play' : 'edit';
+      localStorage.setItem(getModeKey(gameCode, currentUsername), currentMode);
+      updateModeNote();
+      renderBoard();
+    });
+    modeToggleContainer.appendChild(btn);
+  }
+
+  playControls.style.display = 'block';
+  controlsNote.textContent = currentMode === 'edit' 
+    ? 'Edit Mode: click walls to toggle. Use arrows to move.' 
+    : 'Play Mode: only 3×3 visible. Exit/players visible only on your cell.';
+
+  updateModeNote();
+
+  btnLeaveGame.style.display = isCreator ? 'none' : 'block';
+}
+
+function updateModeNote() {
+  modeNote.textContent = currentMode === 'edit'
+    ? 'Edit Mode: click to edit walls. All players and exit shown.'
+    : 'Play Mode: only 3×3 visible. Exit/players visible only on your cell.';
+}
+
+function showScreen(screenId) {
+  loginScreen.classList.add('hidden');
+  createAccountScreen.classList.add('hidden');
+  homeScreen.classList.add('hidden');
+  gameScreen.classList.add('hidden');
+  document.getElementById(screenId).classList.remove('hidden');
+  sessionStorage.setItem('maze_current_screen', screenId);
+}
+
+function log(msg) {
+  const el = document.createElement('div');
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logEl.prepend(el);
+}
+function logClear() { logEl.innerHTML = ''; }
+
+// ==== Movement ====
+function move(dir) {
+  const movesMap = possibleMoves(playerPos);
+  if (!movesMap[dir]) {
+    log("You can't go that way.");
+    return;
+  }
+
+  playerPos = movesMap[dir].slice();
+  savePlayerPosition();
+  if (currentMode === 'play') {
+    moves++;
+    log(`Moved ${dir}.`);
+  }
+  renderBoard();
+  if (currentMode === 'play') {
+    checkWin();
+  }
+}
+
+function checkWin() {
+  if (exitPos && playerPos[0] === exitPos[0] && playerPos[1] === exitPos[1]) {
+    log(`🎉 You found the exit in ${moves} moves!`);
+    alert(`🎉 You found the exit in ${moves} moves!`);
+  }
+}
+
+// ==== Game Flow ====
+function createNewGame() {
+  const gameNameInput = document.getElementById('gameNameInput');
+  const gameName = gameNameInput.value.trim() || `Maze`;
+  const size = parseInt(document.getElementById('mazeSizeSelect').value);
+  maze = generateRandomMaze(size, size);
+  rows = maze.length;
+  cols = maze[0].length;
+
+  const openCells = getOpenCells();
+  exitPos = openCells[Math.floor(Math.random() * openCells.length)];
+  playerPos = getRandomOpenCell([exitPos]);
+  moves = 0;
+  gameCode = Math.random().toString(36).substr(2,8).toUpperCase();
+  isCreator = true;
+  currentMode = 'edit';
+
+  saveSharedMaze();
+  savePlayerPosition();
+  saveGameInfo(gameCode, gameName, currentUsername);
+  saveExitPosition(gameCode, exitPos);
+  setCurrentGame(gameCode);
+  localStorage.setItem(getModeKey(gameCode, currentUsername), currentMode);
+
+  showScreen('gameScreen');
+  gameNameDisplay.textContent = gameName;
+  gameCodeDisplay.textContent = gameCode;
+  usernameDisplay.textContent = currentUsername;
+  updateModeUI();
+  renderBoard();
+  logClear();
+  log(`✅ Created game "${gameName}" (${gameCode})`);
+}
+
+function joinGame(code) {
+  if (!code.trim()) {
+    alert("Please enter a game code.");
+    return;
+  }
+  const gameCodeToJoin = code.trim().toUpperCase();
+  const sharedMaze = loadSharedMaze(gameCodeToJoin);
+  if (!sharedMaze) {
+    alert(`Game "${gameCodeToJoin}" does not exist.`);
+    return;
+  }
+
+  maze = sharedMaze;
+  rows = maze.length;
+  cols = maze[0].length;
+  exitPos = loadExitPosition(gameCodeToJoin);
+
+  const posKey = `${PLAYER_POS_PREFIX}${currentUsername}_${gameCodeToJoin}`;
+  let posStr = localStorage.getItem(posKey);
+  if (posStr) {
+    playerPos = JSON.parse(posStr);
+  } else {
+    const existingPositions = getAllPlayerPositions().map(p => p.pos);
+    const exclude = exitPos ? [...existingPositions, exitPos] : existingPositions;
+    playerPos = getRandomOpenCell(exclude);
+    localStorage.setItem(posKey, JSON.stringify(playerPos));
+  }
+
+  moves = 0;
+  gameCode = gameCodeToJoin;
+  const gameInfo = loadGameInfo(gameCode);
+  isCreator = gameInfo?.creator === currentUsername;
+
+  const savedMode = localStorage.getItem(getModeKey(gameCode, currentUsername));
+  currentMode = isCreator && savedMode ? savedMode : 'play';
+
+  setCurrentGame(gameCode);
+  savePlayerPosition();
+
+  const displayName = gameInfo?.gameName || `Maze ${gameCode}`;
+
+  showScreen('gameScreen');
+  gameNameDisplay.textContent = displayName;
+  gameCodeDisplay.textContent = gameCode;
+  usernameDisplay.textContent = currentUsername;
+  updateModeUI();
+  renderBoard();
+  logClear();
+  log(`✅ Joined game: ${gameCodeToJoin}`);
+}
+
+// ==== Game Library ====
+function refreshGameLibrary() {
+  createdGamesEl.innerHTML = '';
+  joinedGamesEl.innerHTML = '';
+  const user = getCurrentUser();
+  if (!user) return;
+
+  const createdGames = new Set();
+  const joinedGames = new Set();
+
+  for (let key in localStorage) {
+    if (key.startsWith(`${PLAYER_POS_PREFIX}${user}_`)) {
+      const code = key.replace(`${PLAYER_POS_PREFIX}${user}_`, '');
+      const info = loadGameInfo(code);
+      if (info && info.creator === user) {
+        createdGames.add(code);
+      } else {
+        joinedGames.add(code);
       }
     }
   }
-  saveMazeToFirebase();
-  buildBoard();
+
+  if (createdGames.size === 0) {
+    createdGamesEl.textContent = 'None';
+  } else {
+    createdGames.forEach(code => {
+      const gameInfo = loadGameInfo(code);
+      const name = gameInfo?.gameName || `Maze ${code}`;
+      const container = document.createElement('div');
+      container.style.margin = '6px 0';
+
+      const btn = document.createElement('button');
+      btn.className = 'home-btn';
+      btn.style.fontSize = '0.95rem';
+      btn.style.padding = '8px 12px';
+      btn.textContent = `${name} (${code})`;
+      btn.onclick = () => joinGame(code);
+      container.appendChild(btn);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'home-btn delete';
+      delBtn.style.fontSize = '0.85rem';
+      delBtn.style.padding = '4px 8px';
+      delBtn.style.marginLeft = '6px';
+      delBtn.textContent = '🗑️';
+      delBtn.onclick = () => {
+        if (confirm(`Delete game "${name}" (${code})? This cannot be undone.`)) {
+          deleteGame(code, user);
+          refreshGameLibrary();
+        }
+      };
+      container.appendChild(delBtn);
+
+      createdGamesEl.appendChild(container);
+    });
+  }
+
+  if (joinedGames.size === 0) {
+    joinedGamesEl.textContent = 'None';
+  } else {
+    joinedGames.forEach(code => {
+      const gameInfo = loadGameInfo(code);
+      const name = gameInfo?.gameName || `Maze ${code}`;
+      const container = document.createElement('div');
+      container.style.margin = '6px 0';
+
+      const btn = document.createElement('button');
+      btn.className = 'home-btn';
+      btn.style.fontSize = '0.95rem';
+      btn.style.padding = '8px 12px';
+      btn.textContent = `${name} (${code})`;
+      btn.onclick = () => joinGame(code);
+      container.appendChild(btn);
+
+      if (!gameInfo || gameInfo.creator !== user) {
+        const leaveBtn = document.createElement('button');
+        leaveBtn.className = 'home-btn leave';
+        leaveBtn.style.fontSize = '0.85rem';
+        leaveBtn.style.padding = '4px 8px';
+        leaveBtn.style.marginLeft = '6px';
+        leaveBtn.textContent = '🚪 Leave';
+        leaveBtn.onclick = () => {
+          if (confirm(`Leave game "${name}"? Your progress will be removed.`)) {
+            leaveGame(code, user);
+          }
+        };
+        container.appendChild(leaveBtn);
+      }
+
+      joinedGamesEl.appendChild(container);
+    });
+  }
+}
+
+// ==== Event Listeners ====
+document.getElementById('btnLogin').addEventListener('click', async () => {
+  const user = document.getElementById('loginUsername').value.trim();
+  const pass = document.getElementById('loginPassword').value;
+  const err = document.getElementById('loginError');
+  err.textContent = '';
+  if (await login(user, pass)) {
+    currentUsername = user;
+    setCurrentUser(user);
+    showScreen('homeScreen');
+    welcomeUser.textContent = user;
+    refreshGameLibrary();
+  } else {
+    err.textContent = "Invalid username or password.";
+  }
 });
 
-// Keyboard
+document.getElementById('btnCreateAccount').addEventListener('click', () => {
+  showScreen('createAccountScreen');
+});
+
+document.getElementById('btnBackToLogin').addEventListener('click', () => {
+  showScreen('loginScreen');
+});
+
+document.getElementById('btnSubmitCreate').addEventListener('click', async () => {
+  const user = document.getElementById('newUsername').value.trim();
+  const pass = document.getElementById('newPassword').value;
+  const confirm = document.getElementById('confirmPassword').value;
+  const err = document.getElementById('createError');
+  err.textContent = '';
+
+  if (!user || user.length < 3) {
+    err.textContent = "Username must be at least 3 characters.";
+    return;
+  }
+  if (pass.length < 4) {
+    err.textContent = "Password must be at least 4 characters.";
+    return;
+  }
+  if (pass !== confirm) {
+    err.textContent = "Passwords do not match.";
+    return;
+  }
+
+  if (await createAccount(user, pass)) {
+    currentUsername = user;
+    setCurrentUser(user);
+    showScreen('homeScreen');
+    welcomeUser.textContent = user;
+    refreshGameLibrary();
+  } else {
+    err.textContent = "Username already exists.";
+  }
+});
+
+document.getElementById('btnCreateHome').addEventListener('click', createNewGame);
+document.getElementById('btnJoinHome').addEventListener('click', () => {
+  joinGame(document.getElementById('homeGameCode').value);
+});
+document.getElementById('btnLogoutHome').addEventListener('click', () => {
+  logout();
+  showScreen('loginScreen');
+});
+
+document.getElementById('btnBackToHome').addEventListener('click', () => {
+  showScreen('homeScreen');
+  refreshGameLibrary();
+});
+
+document.getElementById('btnLeaveGame').addEventListener('click', () => {
+  if (confirm(`Leave this game? Your position will be removed.`)) {
+    leaveGame(gameCode, currentUsername);
+  }
+});
+
+['north','south','west','east'].forEach(dir => {
+  document.getElementById(dir).addEventListener('click', () => {
+    move(dir.toUpperCase()[0]);
+  });
+});
+
 window.addEventListener('keydown', (e) => {
-  if (!playerId || !isCreator && !players[playerId]) return;
+  if (gameScreen.classList.contains('hidden')) return;
   const keyMap = {ArrowUp:'N', ArrowDown:'S', ArrowLeft:'W', ArrowRight:'E'};
-  if (keyMap[e.key]) movePlayer(keyMap[e.key]);
+  if (keyMap[e.key]) move(keyMap[e.key]);
 });
 
-// Creator-only toggles
-showVisitedChk?.addEventListener('change', updateUI);
-revealMapChk?.addEventListener('change', updateUI);
+window.addEventListener('storage', (e) => {
+  if (e.key && e.key.startsWith(PLAYER_POS_PREFIX) && e.key.endsWith(`_${gameCode}`)) {
+    setTimeout(renderBoard, 50);
+  }
+});
+
+// ==== Strict Page-State Resume ====
+window.addEventListener('load', () => {
+  const user = getCurrentUser();
+  const savedGameCode = getCurrentGame();
+  const lastScreen = sessionStorage.getItem('maze_current_screen');
+
+  if (user && savedGameCode && lastScreen === 'gameScreen') {
+    const sharedMaze = loadSharedMaze(savedGameCode);
+    const exit = loadExitPosition(savedGameCode);
+    const gameInfo = loadGameInfo(savedGameCode);
+    if (sharedMaze && exit && gameInfo) {
+      maze = sharedMaze;
+      exitPos = exit;
+      rows = maze.length;
+      cols = maze[0].length;
+      currentUsername = user;
+      isCreator = gameInfo.creator === user;
+
+      // ✅ FIXED: Set gameCode BEFORE calling renderBoard()
+      gameCode = savedGameCode;
+
+      const posKey = `${PLAYER_POS_PREFIX}${user}_${gameCode}`;
+      const posStr = localStorage.getItem(posKey);
+      playerPos = posStr ? JSON.parse(posStr) : [1,1];
+
+      const savedMode = localStorage.getItem(getModeKey(gameCode, user));
+      currentMode = isCreator && savedMode ? savedMode : (isCreator ? 'edit' : 'play');
+
+      showScreen('gameScreen');
+      gameNameDisplay.textContent = gameInfo.gameName || `Maze ${gameCode}`;
+      gameCodeDisplay.textContent = gameCode;
+      usernameDisplay.textContent = user;
+      updateModeUI();
+      renderBoard();
+      logClear();
+      log("🔄 Resumed game after refresh.");
+      return;
+    }
+  }
+
+  if (user) {
+    currentUsername = user;
+    showScreen('homeScreen');
+    welcomeUser.textContent = user;
+    refreshGameLibrary();
+    return;
+  }
+
+  showScreen('loginScreen');
+});
 </script>
 </body>
 </html>
